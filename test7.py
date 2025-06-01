@@ -16,7 +16,7 @@ if outline_img is None:
 # Create folder to save captured photos
 os.makedirs("captured_images", exist_ok=True)
 
-def is_person_inside_box_80_percent(person_box, guide_box):
+def is_person_inside_box_85_percent(person_box, guide_box):
     px1, py1, px2, py2 = person_box
     gx1, gy1, gx2, gy2 = guide_box
     ix1 = max(px1, gx1)
@@ -27,7 +27,7 @@ def is_person_inside_box_80_percent(person_box, guide_box):
         return False
     person_area = (px2 - px1) * (py2 - py1)
     intersection_area = (ix2 - ix1) * (iy2 - iy1)
-    return intersection_area / person_area >= 0.80
+    return intersection_area / person_area >= 0.85
 
 def extract_outline_contour(image, thickness=3):
     """Extract only the white silhouette contour from outline image."""
@@ -105,7 +105,7 @@ while cap.isOpened() and not photo_captured:
         gx2, gy2 = width - guide_margin, height - guide_margin
         guide_box = (gx1, gy1, gx2, gy2)
 
-        if is_person_inside_box_80_percent(closest_box, guide_box):
+        if is_person_inside_box_85_percent(closest_box, guide_box):
             if not countdown_started:
                 countdown_started = True
                 countdown_start_time = datetime.now()
