@@ -7,6 +7,11 @@ from model_loader import model, outline_img, extract_outline_contour, is_person_
 
 app = FastAPI()
 
+@app.get("/")
+async def root():
+    return {"message": "Smart Capture API is Live!"}
+
+
 @app.post("/detect-capture")
 async def detect_and_capture(files: list[UploadFile] = File(...)):
     for upload_file in files:
