@@ -73,4 +73,4 @@ def is_person_inside_box_85_percent(person_box, guide_box):
         return False
     person_area = (px2 - px1) * (py2 - py1)
     intersection_area = (ix2 - ix1) * (iy2 - iy1)
-    return intersection_area / person_area >= 0.85
+    return intersection_area / person_area >= 0.70
