@@ -41,7 +41,7 @@ outline_img = None
 def load_model():
     global model
     if model is None:
-        model = YOLO("yolov8m.pt")
+        model = YOLO("yolov8n.pt")
     return model
 
 def load_outline_image():
