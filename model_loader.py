@@ -1,5 +1,3 @@
-
-
 import cv2
 import numpy as np
 from ultralytics import YOLO
@@ -239,14 +237,14 @@ class UpperBodyDetector:
         overlay_center_x = overlay_x + expected_width / 2
         overlay_center_y = overlay_y + expected_upper_height / 2
         
-        # Height matching (upper body should be at least 65% of expected height)
+        # Height matching (upper body should be at least 75% of expected height)
         height_ratio = upper_body_height / expected_upper_height
-        height_match = height_ratio >= 0.65
+        height_match = height_ratio >= 0.75
         
         # Position matching (center should be close to overlay center)
-        center_distance = np.sqrt((person_center_x - overlay_center_x)**2 + 
+        center_distance = np.sqrt((person_center_x - overlay_center_x)**2 +
                                 (person_center_y - overlay_center_y)**2)
-        max_allowed_distance = min(expected_width, expected_upper_height) * 0.3
+        max_allowed_distance = min(expected_width, expected_upper_height) * 0.25
         position_match = center_distance <= max_allowed_distance
         
         # Width check (should be reasonable compared to expected)

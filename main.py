@@ -53,13 +53,11 @@ async def detect_and_capture(files: list[UploadFile] = File(...)):
 
     logger.info(f"Detection result: Status={result['status']}, Message={result.get('message', 'N/A')}, Score={result.get('positioning_score', 'N/A')}")
 
-    # Determine which image to send back: annotated or original
-    # For /detect-capture, always return the original image as per user's request.
-    # Bounding boxes and other overlays will be handled by the frontend.
+    # Only send status and message, no frame for detect-capture to reduce lag
     return {
         "status": result["status"],
         "message": result["message"],
-        "frame": base64_original_image_with_prefix # Always return original
+        # "frame": result['frame'] # Removed to prevent frontend lag
     }
 
 @app.post("/capture-final")
