@@ -1,89 +1,26 @@
-# from fastapi import FastAPI, File, UploadFile
-# from fastapi.responses import StreamingResponse
-# import numpy as np
-# import cv2
-# from io import BytesIO
-# from model_loader import model, outline_img, extract_outline_contour, is_person_inside_box_85_percent
-
-# app = FastAPI()
-
-# from fastapi.middleware.cors import CORSMiddleware
-
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["*"],  # or restrict to your frontend domain
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
-
-
-# @app.get("/")
-# async def root():
-#     return {"message": "Smart Capture API is Live!"}
-
-
-# @app.post("/detect-capture")
-# async def detect_and_capture(files: list[UploadFile] = File(...)):
-#     for upload_file in files:
-#         contents = await upload_file.read()
-#         nparr = np.frombuffer(contents, np.uint8)
-#         frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-#         clean_frame = frame.copy()
-
-#         frame_height, frame_width = frame.shape[:2]
-#         outline_height = int(frame_height * 0.95)
-#         outline_width = int(frame_width * 0.5)
-#         outline_resized = cv2.resize(outline_img, (outline_width, outline_height))
-#         contour_mask = extract_outline_contour(outline_resized)
-
-#         x_offset = (frame_width - outline_width) // 2
-#         y_offset = (frame_height - outline_height) // 2
-#         guide_box = (x_offset, y_offset, x_offset + outline_width, y_offset + outline_height)
-
-#         results = model(frame)[0]
-#         person_boxes = []
-
-#         for box in results.boxes:
-#             class_id = int(box.cls[0])
-#             if model.names[class_id] == "person":
-#                 x1, y1, x2, y2 = map(int, box.xyxy[0])
-#                 area = (x2 - x1) * (y2 - y1)
-#                 person_boxes.append(((x1, y1, x2, y2), area))
-
-#         if person_boxes:
-#             closest_box, _ = max(person_boxes, key=lambda b: b[1])
-#             if is_person_inside_box_85_percent(closest_box, guide_box):
-#                 # Convert the captured image to bytes
-#                 _, buffer = cv2.imencode('.jpg', clean_frame)
-#                 return StreamingResponse(BytesIO(buffer.tobytes()), media_type="image/jpeg")
-
-#     return {"message": "No valid person found in any frame."}
-
-# if __name__ == "__main__":
-#     import uvicorn
-#     uvicorn.run("main:app", host="0.0.0.0", port=8000)
-
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-import numpy as np
-import cv2
 from io import BytesIO
+import logging
+import base64 # Added for base64 encoding/decoding
 
-from model_loader import (
-    load_model,
-    load_outline_image,
-    extract_outline_contour,
-    is_person_inside_box_85_percent
+from model_loader import process_image_from_frontend # Use the high-level wrapper
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
 )
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
 # Enable CORS for frontend access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*   "],  # Replace with your frontend URL for production
+    allow_origins=["http://localhost:3000", "*"],  # Replace with your frontend URL for production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -91,55 +28,70 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
+    logger.info("Root endpoint accessed")
     return {"message": "Smart Capture API is Live!"}
 
 @app.post("/detect-capture")
 async def detect_and_capture(files: list[UploadFile] = File(...)):
-    # Load model and outline image lazily
-    model = load_model()
-    outline_img = load_outline_image()
+    logger.info(f"Received request to /detect-capture with {len(files)} files")
 
-    for upload_file in files:
-        contents = await upload_file.read()
-        nparr = np.frombuffer(contents, np.uint8)
-        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        if frame is None:
-            continue
+    if not files:
+        raise HTTPException(status_code=400, detail="No files uploaded")
 
-        clean_frame = frame.copy()
-        frame_height, frame_width = frame.shape[:2]
+    upload_file = files[0] # Assuming only one file per request for simplicity
+    logger.info(f"Processing file: {upload_file.filename}")
 
-        # Resize the outline image to fit the frame
-        outline_height = int(frame_height * 0.95)
-        outline_width = int(frame_width * 0.5)
-        outline_resized = cv2.resize(outline_img, (outline_width, outline_height))
-        contour_mask = extract_outline_contour(outline_resized)
+    contents = await upload_file.read()
+    base64_original_image = base64.b64encode(contents).decode('utf-8')
+    base64_original_image_with_prefix = f"data:{upload_file.content_type};base64,{base64_original_image}"
 
-        # Calculate guide box position
-        x_offset = (frame_width - outline_width) // 2
-        y_offset = (frame_height - outline_height) // 2
-        guide_box = (x_offset, y_offset, x_offset + outline_width, y_offset + outline_height)
+    result = process_image_from_frontend(base64_original_image_with_prefix)
 
-        # Run YOLOv8 model
-        results = model(frame)[0]
-        person_boxes = []
+    if "error" in result:
+        logger.error(f"Error processing image: {result['error']}")
+        raise HTTPException(status_code=500, detail=f"Error processing image: {result['error']}")
 
-        for box in results.boxes:
-            class_id = int(box.cls[0])
-            if model.names[class_id] == "person":
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                area = (x2 - x1) * (y2 - y1)
-                person_boxes.append(((x1, y1, x2, y2), area))
+    logger.info(f"Detection result: Status={result['status']}, Message={result.get('message', 'N/A')}, Score={result.get('positioning_score', 'N/A')}")
 
-        # Process detections
-        if person_boxes:
-            closest_box, _ = max(person_boxes, key=lambda b: b[1])
-            if is_person_inside_box_85_percent(closest_box, guide_box):
-                _, buffer = cv2.imencode('.jpg', clean_frame)
-                return StreamingResponse(BytesIO(buffer.tobytes()), media_type="image/jpeg")
+    # Determine which image to send back: annotated or original
+    # For /detect-capture, always return the original image as per user's request.
+    # Bounding boxes and other overlays will be handled by the frontend.
+    return {
+        "status": result["status"],
+        "message": result["message"],
+        "frame": base64_original_image_with_prefix # Always return original
+    }
 
-    return {"message": "No valid person found in any frame."}
+@app.post("/capture-final")
+async def capture_final(files: list[UploadFile] = File(...)):
+    logger.info(f"Received request to /capture-final with {len(files)} files")
+
+    if not files:
+        raise HTTPException(status_code=400, detail="No files uploaded")
+
+    upload_file = files[0]
+    logger.info(f"Processing file: {upload_file.filename}")
+
+    contents = await upload_file.read()
+    base64_image = base64.b64encode(contents).decode('utf-8')
+    base64_image_with_prefix = f"data:{upload_file.content_type};base64,{base64_image}"
+
+    result = process_image_from_frontend(base64_image_with_prefix)
+
+    if "error" in result:
+        logger.error(f"Error processing image: {result['error']}")
+        raise HTTPException(status_code=500, detail=f"Error processing image: {result['error']}")
+
+    logger.info(f"Detection result: Status={result['status']}, Message={result.get('message', 'N/A')}, Score={result.get('positioning_score', 'N/A')}")
+
+    # For capture-final, always return the annotated image for feedback, as it's a final capture attempt
+    return {
+        "status": result["status"],
+        "message": result["message"],
+        "frame": result['frame'] # This is already base64 with prefix
+    }
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=10000)
+    logger.info("Starting server on http://127.0.0.1:8000")
+    uvicorn.run("main:app", host="127.0.0.1", port=8000)
