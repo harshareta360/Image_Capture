@@ -269,7 +269,7 @@ class UpperBodyDetector:
         if score >= 0.8:
             status = "perfect_position"
             message = "Perfect! Upper body positioned correctly"
-        elif score >= 0.7:
+        elif score >= 0.6:
             status = "good_position"
             message = "Good position, minor adjustments needed"
         elif not height_match:
